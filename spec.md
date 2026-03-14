@@ -1,29 +1,41 @@
 # Looket
 
 ## Current State
-New project, no existing code.
+- Auth, user profiles, question sets, shop, leaderboard, game modes (FishingFrenzy, CryptoHack, StudyMode) all exist.
+- AdminPage: give coins requires manual principal input; Give button in user list shows a toast redirect instead of actually working. No ban/suspend UI.
+- No multiplayer system.
+- HacksPage (loyak-only): only has "set coin balance" hack via saveCallerUserProfile. saveCallerUserProfile does NOT sync the users Map, so leaderboard coins don't update.
+- banUser exists in backend but UI doesn't expose it.
+- No suspendUser functionality.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Sign in / sign up with username (authorization)
-- Home/discovery page: browse and play community question sets
-- Study mode: flashcard-style study from a question set
-- Game modes: Fishing Frenzy and Crypto Hack (mini-games using question sets)
-- Question set creator: users create sets with title, description, questions (term + definition or MC)
-- Publish/post question sets publicly so others can discover them
-- Blook shop: buy cosmetic blooks (avatars) with Looket Coins
-- Coins system: earn coins by playing games, spending in shop
-- Leaderboard: top players by coins/XP
-- Admin hacks panel: only accessible by username "loyak" - see all users, give coins, ban users
-- Packs: bundle of blooks that can be purchased with coins (random blook reward)
+- Backend: `giveCoinsToName(name: Text, amount: Nat)` - admin gives coins by username (no principal needed)
+- Backend: `suspendUser(user: Principal, hours: Nat)` - admin suspends for N hours
+- Backend: `unsuspendUser(user: Principal)` - admin lifts suspension early
+- Backend: `isUserSuspended(user: Principal)` - query check
+- Backend: Multiplayer room system: `createRoom(questionSetId: Nat)` returns room code, `joinRoom(code: Text)` joins, `getRoomState(code: Text)` polls state, `submitRoomAnswer(code: Text, questionIdx: Nat, answerIdx: Nat)` records answer, `leaveRoom(code: Text)`, `startRoom(code: Text)` host starts game
+- Backend: Fix `saveCallerUserProfile` to also update users Map so coins sync
+- Frontend: AdminPage - Give Coins by username input (not principal), ban button per user, suspend button per user with hours input
+- Frontend: MultiplayerPage - Create Room (get 6-char code), Join Room (enter code), lobby, game with polling, scoreboard
+- Frontend: HacksPage expanded - set coins, set XP, view all answers toggle (stored in context for game pages), skip question hack, infinite time hack toggle, auto-answer hack
+- Frontend: Pass "hacksEnabled" and "showAnswers" flags from HacksPage/App down to game pages so they can reveal answers
 
 ### Modify
-- N/A
+- AdminPage: replace principal-input Give Coins with username-based give coins; make per-user Give button actually call giveCoinsToName
+- AdminPage: add Ban and Suspend controls per user
+- App.tsx: add MultiplayerPage route; pass hack flags to game pages
+- FishingFrenzy, CryptoHack, StudyMode: accept optional `showAnswers` prop that highlights correct answer
 
 ### Remove
-- N/A
+- Nothing removed
 
 ## Implementation Plan
-1. Backend: user auth, question sets CRUD, publish/discover, coins wallet, blook ownership, shop items, packs, leaderboard, admin endpoints
-2. Frontend: sign in/up, home/discovery, set creator, study mode, fishing frenzy game, crypto hack game, blook shop, packs page, leaderboard, admin panel
+1. Generate new Motoko backend with: giveCoinsToName, suspendUser/unsuspendUser/isUserSuspended, multiplayer room system, fixed saveCallerUserProfile sync
+2. Update backend.d.ts interface to match
+3. Rewrite AdminPage with working give coins (by name), ban button, suspend UI
+4. Add MultiplayerPage with create/join room, lobby, polling game loop, scoreboard
+5. Expand HacksPage with multiple working hacks
+6. Update game pages to accept showAnswers prop
+7. Add multiplayer nav link for all users

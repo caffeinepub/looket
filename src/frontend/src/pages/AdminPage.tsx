@@ -5,12 +5,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Principal } from "@dfinity/principal";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { User, backendInterface } from "../backend.d";
+import type { AdminUser, backendInterface } from "../backend.d";
 
 export function AdminPage({ actor }: { actor: backendInterface | null }) {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [coinAmounts, setCoinAmounts] = useState<Record<string, string>>({});
+  const [suspendHours, setSuspendHours] = useState<Record<string, string>>({});
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
+    {},
+  );
 
   // Add blook form
   const [blookName, setBlookName] = useState("");
@@ -18,13 +22,13 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
   const [blookRarity, setBlookRarity] = useState("common");
   const [addingBlook, setAddingBlook] = useState(false);
 
-  // Give coins by principal
-  const [targetPrincipal, setTargetPrincipal] = useState("");
+  // Give coins by username
+  const [targetName, setTargetName] = useState("");
   const [giveAmount, setGiveAmount] = useState("100");
   const [givingDirect, setGivingDirect] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
+    const loadUsers = async () => {
       if (!actor) return;
       setLoading(true);
       try {
@@ -36,21 +40,104 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
         setLoading(false);
       }
     };
-    load();
+    loadUsers();
   }, [actor]);
 
+  const loadUsers = async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const u = await actor.getAllUsers();
+      setUsers(u);
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setAction = (key: string, val: boolean) =>
+    setActionLoading((prev) => ({ ...prev, [key]: val }));
+
   const handleGiveDirect = async () => {
-    if (!actor || !targetPrincipal.trim()) return;
+    if (!actor || !targetName.trim()) return;
     setGivingDirect(true);
     try {
-      const principal = Principal.fromText(targetPrincipal.trim());
-      await actor.giveCoins(principal, BigInt(giveAmount));
-      toast.success(`✅ Gave ${giveAmount} coins!`);
-      setTargetPrincipal("");
+      await actor.giveCoinsToName(targetName.trim(), BigInt(giveAmount));
+      toast.success(`✅ Gave ${giveAmount} coins to ${targetName}!`);
+      setTargetName("");
+      await loadUsers();
     } catch {
-      toast.error("Failed. Check principal format.");
+      toast.error("Failed. Check username.");
     } finally {
       setGivingDirect(false);
+    }
+  };
+
+  const handleGiveToUser = async (user: AdminUser) => {
+    if (!actor) return;
+    const amount = coinAmounts[user.id.toString()] || "0";
+    const key = `give-${user.id}`;
+    setAction(key, true);
+    try {
+      await actor.giveCoinsToName(user.name, BigInt(amount));
+      toast.success(`✅ Gave ${amount} coins to ${user.name}!`);
+      setCoinAmounts((prev) => ({ ...prev, [user.id.toString()]: "" }));
+      await loadUsers();
+    } catch {
+      toast.error("Failed to give coins.");
+    } finally {
+      setAction(key, false);
+    }
+  };
+
+  const handleBan = async (user: AdminUser) => {
+    if (!actor) return;
+    if (!window.confirm(`Ban ${user.name}? This is permanent.`)) return;
+    const key = `ban-${user.id}`;
+    setAction(key, true);
+    try {
+      await actor.banUser(Principal.fromText(user.principalText));
+      toast.success(`🚫 ${user.name} has been banned.`);
+      await loadUsers();
+    } catch {
+      toast.error("Failed to ban user.");
+    } finally {
+      setAction(key, false);
+    }
+  };
+
+  const handleSuspend = async (user: AdminUser) => {
+    if (!actor) return;
+    const hours = suspendHours[user.id.toString()] || "24";
+    const key = `suspend-${user.id}`;
+    setAction(key, true);
+    try {
+      await actor.suspendUser(
+        Principal.fromText(user.principalText),
+        BigInt(hours),
+      );
+      toast.success(`⏸️ ${user.name} suspended for ${hours}h.`);
+      await loadUsers();
+    } catch {
+      toast.error("Failed to suspend user.");
+    } finally {
+      setAction(key, false);
+    }
+  };
+
+  const handleUnsuspend = async (user: AdminUser) => {
+    if (!actor) return;
+    const key = `unsuspend-${user.id}`;
+    setAction(key, true);
+    try {
+      await actor.unsuspendUser(Principal.fromText(user.principalText));
+      toast.success(`✅ ${user.name} unsuspended.`);
+      await loadUsers();
+    } catch {
+      toast.error("Failed to unsuspend.");
+    } finally {
+      setAction(key, false);
     }
   };
 
@@ -82,14 +169,16 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
         </Badge>
       </div>
 
-      {/* Give coins by principal */}
+      {/* Give coins by username */}
       <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-        <h2 className="font-display text-xl font-bold">💰 Give Coins</h2>
+        <h2 className="font-display text-xl font-bold">
+          💰 Give Coins by Username
+        </h2>
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
-            placeholder="User Principal (e.g. aaaaa-aa...)"
-            value={targetPrincipal}
-            onChange={(e) => setTargetPrincipal(e.target.value)}
+            placeholder="Username (e.g. loyak)"
+            value={targetName}
+            onChange={(e) => setTargetName(e.target.value)}
             className="flex-1 bg-input rounded-xl"
             data-ocid="admin.input"
           />
@@ -99,11 +188,10 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
             value={giveAmount}
             onChange={(e) => setGiveAmount(e.target.value)}
             className="w-28 bg-input rounded-xl"
-            data-ocid="admin.secondary_button"
           />
           <Button
             onClick={handleGiveDirect}
-            disabled={givingDirect || !targetPrincipal.trim()}
+            disabled={givingDirect || !targetName.trim()}
             className="bg-primary text-primary-foreground rounded-xl"
             data-ocid="admin.primary_button"
           >
@@ -159,7 +247,7 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
         {loading ? (
           <div className="space-y-2" data-ocid="admin.loading_state">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-14 rounded-xl" />
+              <Skeleton key={i} className="h-20 rounded-xl" />
             ))}
           </div>
         ) : users.length === 0 ? (
@@ -170,26 +258,41 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
             No users found.
           </p>
         ) : (
-          <div className="space-y-2" data-ocid="admin.table">
+          <div className="space-y-3" data-ocid="admin.table">
             {users.map((user, idx) => (
               <div
                 key={user.id.toString()}
-                className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/20"
+                className={`p-4 rounded-xl border ${
+                  user.suspended
+                    ? "border-destructive/50 bg-destructive/5"
+                    : "border-border bg-muted/20"
+                }`}
                 data-ocid={`admin.item.${idx + 1}`}
               >
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {user.name.charAt(0).toUpperCase()}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium truncate">{user.name}</p>
+                      {user.suspended && (
+                        <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-xs">
+                          SUSPENDED
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      🪙 {user.coins.toString()} · XP {user.xp.toString()}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{user.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    🪙 {user.coins.toString()} · XP {user.xp.toString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
+
+                {/* Give coins row */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Input
                     type="number"
-                    placeholder="Coins"
+                    placeholder="Coins to give"
                     value={coinAmounts[user.id.toString()] ?? ""}
                     onChange={(e) =>
                       setCoinAmounts((prev) => ({
@@ -197,19 +300,64 @@ export function AdminPage({ actor }: { actor: backendInterface | null }) {
                         [user.id.toString()]: e.target.value,
                       }))
                     }
-                    className="w-20 h-8 text-xs bg-input rounded-lg"
+                    className="w-32 h-8 text-xs bg-input rounded-lg"
                   />
                   <Button
                     size="sm"
-                    onClick={async () => {
-                      toast.info(
-                        "To give coins, use the Give Coins section above with the user's principal.",
-                      );
-                    }}
+                    onClick={() => handleGiveToUser(user)}
+                    disabled={actionLoading[`give-${user.id}`]}
                     className="h-8 text-xs bg-primary/20 text-primary border border-primary/30 rounded-lg"
                     data-ocid={`admin.item.${idx + 1}.button`}
                   >
-                    Give
+                    {actionLoading[`give-${user.id}`] ? "..." : "💰 Give"}
+                  </Button>
+                </div>
+
+                {/* Suspend / Ban row */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Hours"
+                    value={suspendHours[user.id.toString()] ?? "24"}
+                    onChange={(e) =>
+                      setSuspendHours((prev) => ({
+                        ...prev,
+                        [user.id.toString()]: e.target.value,
+                      }))
+                    }
+                    className="w-24 h-8 text-xs bg-input rounded-lg"
+                  />
+                  {user.suspended ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handleUnsuspend(user)}
+                      disabled={actionLoading[`unsuspend-${user.id}`]}
+                      className="h-8 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg"
+                    >
+                      {actionLoading[`unsuspend-${user.id}`]
+                        ? "..."
+                        : "✅ Unsuspend"}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleSuspend(user)}
+                      disabled={actionLoading[`suspend-${user.id}`]}
+                      className="h-8 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg"
+                    >
+                      {actionLoading[`suspend-${user.id}`]
+                        ? "..."
+                        : "⏸️ Suspend"}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() => handleBan(user)}
+                    disabled={actionLoading[`ban-${user.id}`]}
+                    className="h-8 text-xs bg-destructive/20 text-destructive border border-destructive/30 rounded-lg"
+                    data-ocid={`admin.item.${idx + 1}.delete_button`}
+                  >
+                    {actionLoading[`ban-${user.id}`] ? "..." : "🚫 Ban"}
                   </Button>
                 </div>
               </div>

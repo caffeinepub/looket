@@ -10,12 +10,14 @@ export function FishingFrenzy({
   profile,
   onProfileUpdate,
   actor,
+  showAnswers,
 }: {
   questionSet: QuestionSet;
   onBack: () => void;
   profile: UserProfile;
   onProfileUpdate: (p: UserProfile) => void;
   actor: backendInterface | null;
+  showAnswers?: boolean;
 }) {
   const questions = questionSet.questions.slice(0, 10);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -116,7 +118,6 @@ export function FishingFrenzy({
           "linear-gradient(180deg, oklch(0.25 0.08 220) 0%, oklch(0.15 0.05 220) 50%, oklch(0.1 0.03 230) 100%)",
       }}
     >
-      {/* Water waves decoration */}
       <div
         className="absolute bottom-0 left-0 right-0 h-32 opacity-20"
         style={{
@@ -153,7 +154,6 @@ export function FishingFrenzy({
           className="h-2"
         />
 
-        {/* Fish animation */}
         <div className="flex justify-center items-center h-24">
           {fishState === "idle" && (
             <div className="text-6xl animate-fish-swim">🐟</div>
@@ -171,19 +171,24 @@ export function FishingFrenzy({
           )}
         </div>
 
-        {/* Question */}
         <div className="bg-card/70 border border-border/50 rounded-2xl p-6 backdrop-blur-sm">
           <p className="font-display text-xl font-bold text-center mb-4">
             {current.prompt}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {current.choices.map((choice, idx) => {
+              const isCorrect = idx === Number(current.correctIndex);
               let btnClass =
                 "w-full p-4 rounded-xl border text-left font-medium transition-all ";
               if (selected === null) {
-                btnClass +=
-                  "border-border bg-card/60 hover:bg-primary/20 hover:border-primary/50";
-              } else if (idx === Number(current.correctIndex)) {
+                if (showAnswers && isCorrect) {
+                  btnClass +=
+                    "border-green-400 bg-green-500/10 shadow-[0_0_12px_2px_oklch(0.65_0.2_145)]";
+                } else {
+                  btnClass +=
+                    "border-border bg-card/60 hover:bg-primary/20 hover:border-primary/50";
+                }
+              } else if (isCorrect) {
                 btnClass += "border-green-500 bg-green-500/20 text-green-300";
               } else if (idx === selected) {
                 btnClass +=

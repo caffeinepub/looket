@@ -10,12 +10,14 @@ export function CryptoHack({
   profile,
   onProfileUpdate,
   actor,
+  showAnswers,
 }: {
   questionSet: QuestionSet;
   onBack: () => void;
   profile: UserProfile;
   onProfileUpdate: (p: UserProfile) => void;
   actor: backendInterface | null;
+  showAnswers?: boolean;
 }) {
   const questions = questionSet.questions.slice(0, 10);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -144,7 +146,6 @@ export function CryptoHack({
         fontFamily: "'JetBrains Mono', monospace",
       }}
     >
-      {/* Scanline effect */}
       <div
         className="absolute inset-0 pointer-events-none opacity-5"
         style={{
@@ -187,9 +188,7 @@ export function CryptoHack({
 
         {feedback && (
           <div
-            className={`text-2xl font-bold text-center py-3 rounded-lg animate-reveal-up ${
-              feedback === "ACCESS GRANTED" ? "" : ""
-            }`}
+            className="text-2xl font-bold text-center py-3 rounded-lg animate-reveal-up"
             style={{
               color:
                 feedback === "ACCESS GRANTED"
@@ -206,7 +205,6 @@ export function CryptoHack({
           </div>
         )}
 
-        {/* Question */}
         <div
           className="border rounded-xl p-5 space-y-4"
           style={{
@@ -220,13 +218,14 @@ export function CryptoHack({
           <p className="text-lg font-bold leading-snug">{current.prompt}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {current.choices.map((choice, idx) => {
+              const isCorrect = idx === Number(current.correctIndex);
               let style: React.CSSProperties = {
                 background: "oklch(0.1 0.01 150)",
                 borderColor: "oklch(0.2 0.03 150)",
                 color: "oklch(0.75 0.18 145)",
               };
               if (selected !== null) {
-                if (idx === Number(current.correctIndex)) {
+                if (isCorrect) {
                   style = {
                     background: "oklch(0.12 0.06 145)",
                     borderColor: "oklch(0.5 0.18 145)",
@@ -246,6 +245,13 @@ export function CryptoHack({
                     opacity: 0.5,
                   };
                 }
+              } else if (showAnswers && isCorrect) {
+                style = {
+                  background: "oklch(0.12 0.06 145)",
+                  borderColor: "oklch(0.65 0.2 145)",
+                  color: "oklch(0.75 0.18 145)",
+                  boxShadow: "0 0 12px 2px oklch(0.5 0.2 145)",
+                };
               }
               return (
                 <button

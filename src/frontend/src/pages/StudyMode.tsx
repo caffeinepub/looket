@@ -6,9 +6,11 @@ import type { QuestionSet } from "../backend.d";
 export function StudyMode({
   questionSet,
   onBack,
+  showAnswers,
 }: {
   questionSet: QuestionSet;
   onBack: () => void;
+  showAnswers?: boolean;
 }) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -16,6 +18,9 @@ export function StudyMode({
 
   const questions = questionSet.questions;
   const current = questions[currentIdx];
+
+  // Auto-flip if showAnswers is on
+  const displayFlipped = showAnswers ? true : flipped;
 
   const handleNext = () => {
     if (currentIdx < questions.length - 1) {
@@ -93,24 +98,24 @@ export function StudyMode({
         className="h-2"
       />
 
-      {/* Flashcard */}
       <button
         type="button"
         className="relative h-64 cursor-pointer group w-full text-left"
-        onClick={() => setFlipped(!flipped)}
+        onClick={() => !showAnswers && setFlipped(!flipped)}
         style={{ perspective: "1000px" }}
         data-ocid="study.canvas_target"
-        onKeyDown={(e) => e.key === "Enter" && setFlipped(!flipped)}
+        onKeyDown={(e) =>
+          e.key === "Enter" && !showAnswers && setFlipped(!flipped)
+        }
         tabIndex={0}
       >
         <div
           className="absolute inset-0 transition-transform duration-500"
           style={{
             transformStyle: "preserve-3d",
-            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            transform: displayFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
           }}
         >
-          {/* Front */}
           <div
             className="absolute inset-0 bg-card border border-border rounded-2xl glow-card flex flex-col items-center justify-center p-8"
             style={{ backfaceVisibility: "hidden" }}
@@ -122,7 +127,6 @@ export function StudyMode({
               Click to reveal answer
             </p>
           </div>
-          {/* Back */}
           <div
             className="absolute inset-0 bg-primary/10 border border-primary/40 rounded-2xl flex flex-col items-center justify-center p-8"
             style={{

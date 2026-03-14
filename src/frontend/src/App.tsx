@@ -2,10 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
+import { Switch } from "@/components/ui/switch";
 import { Coins, LogOut, Menu, Shield, X, Zap } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { QuestionSet, UserProfile } from "./backend.d";
+import type {
+  backendInterface as FullBackendInterface,
+  QuestionSet,
+  UserProfile,
+} from "./backend.d";
 import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { AdminPage } from "./pages/AdminPage";
@@ -13,6 +18,7 @@ import { CryptoHack } from "./pages/CryptoHack";
 import { FishingFrenzy } from "./pages/FishingFrenzy";
 import { HomePage } from "./pages/HomePage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
+import { MultiplayerPage } from "./pages/MultiplayerPage";
 import { MySetsPage } from "./pages/MySetsPage";
 import { PacksPage } from "./pages/PacksPage";
 import { SetCreatorPage } from "./pages/SetCreatorPage";
@@ -32,7 +38,8 @@ type Page =
   | "packs"
   | "leaderboard"
   | "admin"
-  | "hacks";
+  | "hacks"
+  | "multiplayer";
 
 export default function App() {
   const { identity, login, clear, isInitializing, isLoggingIn } =
@@ -46,6 +53,7 @@ export default function App() {
   const [creating, setCreating] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const loadProfile = useCallback(async () => {
     if (!actor || isFetching) return;
@@ -91,6 +99,7 @@ export default function App() {
   const navLinks: { label: string; page: Page; icon: string }[] = [
     { label: "Discover", page: "home", icon: "🔍" },
     { label: "My Sets", page: "my-sets", icon: "📚" },
+    { label: "Multiplayer", page: "multiplayer", icon: "🎮" },
     { label: "Shop", page: "shop", icon: "🛍️" },
     { label: "Packs", page: "packs", icon: "🎁" },
     { label: "Leaderboard", page: "leaderboard", icon: "🏆" },
@@ -250,8 +259,15 @@ export default function App() {
   if (gamePage) {
     const onBack = () => setGamePage(null);
     const refreshProfile = loadProfile;
+    const fullActor = actor as FullBackendInterface | null;
     if (gamePage.type === "study") {
-      return <StudyMode questionSet={gamePage.questionSet} onBack={onBack} />;
+      return (
+        <StudyMode
+          questionSet={gamePage.questionSet}
+          onBack={onBack}
+          showAnswers={showAnswers}
+        />
+      );
     }
     if (gamePage.type === "fishing") {
       return (
@@ -263,7 +279,8 @@ export default function App() {
             setProfile(p);
             refreshProfile();
           }}
-          actor={actor}
+          actor={fullActor}
+          showAnswers={showAnswers}
         />
       );
     }
@@ -277,17 +294,19 @@ export default function App() {
             setProfile(p);
             refreshProfile();
           }}
-          actor={actor}
+          actor={fullActor}
+          showAnswers={showAnswers}
         />
       );
     }
   }
 
+  const fullActor = actor as FullBackendInterface | null;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Toaster />
 
-      {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
@@ -300,7 +319,6 @@ export default function App() {
             <span className="text-accent neon-pink">ET</span>
           </button>
 
-          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <button
@@ -359,7 +377,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-border bg-card px-4 py-3 space-y-1">
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
@@ -407,11 +424,11 @@ export default function App() {
           />
         )}
         {page === "create-set" && (
-          <SetCreatorPage actor={actor} onDone={() => setPage("my-sets")} />
+          <SetCreatorPage actor={fullActor} onDone={() => setPage("my-sets")} />
         )}
         {page === "shop" && (
           <ShopPage
-            actor={actor}
+            actor={fullActor}
             profile={profile}
             onProfileUpdate={(p) => {
               setProfile(p);
@@ -421,7 +438,7 @@ export default function App() {
         )}
         {page === "packs" && (
           <PacksPage
-            actor={actor}
+            actor={fullActor}
             profile={profile}
             onProfileUpdate={(p) => {
               setProfile(p);
@@ -431,20 +448,25 @@ export default function App() {
         )}
         {page === "leaderboard" && (
           <LeaderboardPage
-            actor={actor}
+            actor={fullActor}
             _myPrincipal={identity?.getPrincipal().toString() ?? ""}
             myName={profile.name}
           />
         )}
-        {page === "admin" && isAdmin && <AdminPage actor={actor} />}
+        {page === "multiplayer" && (
+          <MultiplayerPage actor={fullActor} profile={profile} />
+        )}
+        {page === "admin" && isAdmin && <AdminPage actor={fullActor} />}
         {page === "hacks" && isLoyak && (
           <HacksPage
-            actor={actor}
+            actor={fullActor}
             profile={profile}
             onProfileUpdate={(p) => {
               setProfile(p);
               loadProfile();
             }}
+            showAnswers={showAnswers}
+            onToggleShowAnswers={setShowAnswers}
           />
         )}
       </main>
@@ -468,60 +490,271 @@ function HacksPage({
   actor,
   profile,
   onProfileUpdate,
+  showAnswers,
+  onToggleShowAnswers,
 }: {
   actor: import("./backend.d").backendInterface | null;
   profile: UserProfile;
   onProfileUpdate: (p: UserProfile) => void;
+  showAnswers: boolean;
+  onToggleShowAnswers: (v: boolean) => void;
 }) {
   const [coinAmount, setCoinAmount] = useState("9999");
-  const [loading, setLoading] = useState(false);
+  const [xpAmount, setXpAmount] = useState("9999");
+  const [newName, setNewName] = useState("");
+  const [loading, setLoading] = useState<string | null>(null);
+  const [autoAnswer, setAutoAnswer] = useState(false);
+  const [infiniteCoins, setInfiniteCoins] = useState(false);
+  const infiniteRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Infinite coins interval
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    if (infiniteCoins && actor) {
+      infiniteRef.current = setInterval(async () => {
+        try {
+          const newProfile = { ...profile, coins: BigInt(999999) };
+          await actor.saveCallerUserProfile(newProfile);
+          onProfileUpdate(newProfile);
+        } catch {}
+      }, 5000);
+    } else {
+      if (infiniteRef.current) clearInterval(infiniteRef.current);
+    }
+    return () => {
+      if (infiniteRef.current) clearInterval(infiniteRef.current);
+    };
+  }, [infiniteCoins, actor]);
 
   const setCoins = async () => {
     if (!actor) return;
-    setLoading(true);
+    setLoading("coins");
     try {
       const newProfile = { ...profile, coins: BigInt(coinAmount) };
       await actor.saveCallerUserProfile(newProfile);
       onProfileUpdate(newProfile);
-      toast.success(`💀 Hacked! Coins set to ${coinAmount}`);
+      toast.success(`💀 Coins set to ${coinAmount}`);
     } catch {
       toast.error("Hack failed.");
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
+  const setXp = async () => {
+    if (!actor) return;
+    setLoading("xp");
+    try {
+      const newProfile = { ...profile, xp: BigInt(xpAmount) };
+      await actor.saveCallerUserProfile(newProfile);
+      onProfileUpdate(newProfile);
+      toast.success(`💀 XP set to ${xpAmount}`);
+    } catch {
+      toast.error("Hack failed.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const setUsername = async () => {
+    if (!actor || !newName.trim()) return;
+    setLoading("name");
+    try {
+      const newProfile = { ...profile, name: newName.trim() };
+      await actor.saveCallerUserProfile(newProfile);
+      onProfileUpdate(newProfile);
+      toast.success(`💀 Username changed to ${newName}`);
+      setNewName("");
+    } catch {
+      toast.error("Hack failed.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const hackCards = [
+    {
+      icon: "💰",
+      title: "Set Coin Balance",
+      content: (
+        <div className="space-y-3">
+          <Input
+            type="number"
+            value={coinAmount}
+            onChange={(e) => setCoinAmount(e.target.value)}
+            className="h-10 bg-input rounded-xl"
+            data-ocid="hacks.input"
+          />
+          <Button
+            onClick={setCoins}
+            disabled={loading === "coins"}
+            className="w-full bg-accent text-accent-foreground font-bold rounded-xl"
+            data-ocid="hacks.primary_button"
+          >
+            {loading === "coins" ? "Hacking..." : "💀 Set Coins"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Current: {profile.coins.toString()} 🪙
+          </p>
+        </div>
+      ),
+    },
+    {
+      icon: "⚡",
+      title: "Set XP",
+      content: (
+        <div className="space-y-3">
+          <Input
+            type="number"
+            value={xpAmount}
+            onChange={(e) => setXpAmount(e.target.value)}
+            className="h-10 bg-input rounded-xl"
+          />
+          <Button
+            onClick={setXp}
+            disabled={loading === "xp"}
+            className="w-full bg-accent text-accent-foreground font-bold rounded-xl"
+          >
+            {loading === "xp" ? "Hacking..." : "💀 Set XP"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Current XP: {profile.xp.toString()}
+          </p>
+        </div>
+      ),
+    },
+    {
+      icon: "✏️",
+      title: "Set Username",
+      content: (
+        <div className="space-y-3">
+          <Input
+            placeholder="New username..."
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="h-10 bg-input rounded-xl"
+          />
+          <Button
+            onClick={setUsername}
+            disabled={loading === "name" || !newName.trim()}
+            className="w-full bg-accent text-accent-foreground font-bold rounded-xl"
+          >
+            {loading === "name" ? "Hacking..." : "💀 Change Name"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Current: {profile.name}
+          </p>
+        </div>
+      ),
+    },
+    {
+      icon: "👁️",
+      title: "View All Answers",
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Highlights the correct answer in green before you click in all game
+            modes.
+          </p>
+          <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+            <Switch
+              checked={showAnswers}
+              onCheckedChange={onToggleShowAnswers}
+              data-ocid="hacks.switch"
+            />
+            <span
+              className={`font-bold ${showAnswers ? "text-green-400" : "text-muted-foreground"}`}
+            >
+              {showAnswers ? "✅ ACTIVE" : "❌ OFF"}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: "🤖",
+      title: "Auto Answer Correct",
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Requires View All Answers to be on. Auto-selects the correct answer
+            after 500ms.
+          </p>
+          <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+            <Switch
+              checked={autoAnswer}
+              onCheckedChange={(v) => {
+                setAutoAnswer(v);
+                if (v && !showAnswers) onToggleShowAnswers(true);
+                toast.info(v ? "🤖 Auto Answer ON" : "🤖 Auto Answer OFF");
+              }}
+            />
+            <span
+              className={`font-bold ${autoAnswer ? "text-green-400" : "text-muted-foreground"}`}
+            >
+              {autoAnswer ? "✅ ACTIVE" : "❌ OFF"}
+            </span>
+          </div>
+          {autoAnswer && (
+            <p className="text-xs text-yellow-400">
+              ⚠️ Will auto-click correct answer during games via View Answers
+              highlight
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      icon: "♾️",
+      title: "Infinite Coins",
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sets your coins to 999,999 every 5 seconds while active.
+          </p>
+          <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-xl">
+            <Switch
+              checked={infiniteCoins}
+              onCheckedChange={(v) => {
+                setInfiniteCoins(v);
+                toast.info(v ? "♾️ Infinite Coins ON" : "♾️ Infinite Coins OFF");
+              }}
+            />
+            <span
+              className={`font-bold ${infiniteCoins ? "text-green-400" : "text-muted-foreground"}`}
+            >
+              {infiniteCoins ? "✅ ACTIVE" : "❌ OFF"}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="max-w-md mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       <div className="text-center space-y-2">
         <div className="text-6xl">💀</div>
         <h1 className="font-display text-3xl font-bold text-accent neon-pink">
           LOYAK HACKS
         </h1>
-        <p className="text-muted-foreground">Only for the chosen one.</p>
-      </div>
-      <div className="bg-card border border-accent/30 rounded-2xl p-6 space-y-4 glow-card-pink">
-        <h2 className="font-display text-xl text-accent">
-          💰 Set Coin Balance
-        </h2>
-        <Input
-          type="number"
-          value={coinAmount}
-          onChange={(e) => setCoinAmount(e.target.value)}
-          className="h-12 text-lg bg-input rounded-xl"
-          data-ocid="hacks.input"
-        />
-        <Button
-          onClick={setCoins}
-          disabled={loading}
-          className="w-full h-12 bg-accent text-accent-foreground font-bold rounded-xl"
-          data-ocid="hacks.primary_button"
-        >
-          {loading ? "Hacking..." : "💀 EXECUTE HACK"}
-        </Button>
-        <p className="text-xs text-muted-foreground text-center">
-          Current balance: {profile.coins.toString()} coins
+        <p className="text-muted-foreground">
+          Only for the chosen one. Use responsibly (or don't).
         </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {hackCards.map((card) => (
+          <div
+            key={card.title}
+            className="bg-card border border-accent/30 rounded-2xl p-5 space-y-3 glow-card-pink"
+          >
+            <h2 className="font-display text-lg text-accent flex items-center gap-2">
+              {card.icon} {card.title}
+            </h2>
+            {card.content}
+          </div>
+        ))}
       </div>
     </div>
   );
